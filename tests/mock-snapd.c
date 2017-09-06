@@ -97,6 +97,18 @@ mock_app_free (MockApp *app)
 }
 
 static void
+mock_channel_free (MockChannel *channel)
+{
+    g_free (channel->channel);
+    g_free (channel->confinement);
+    g_free (channel->epoch);
+    g_free (channel->name);
+    g_free (channel->revision);
+    g_free (channel->version);
+    g_slice_free (MockChannel, channel);
+}
+
+static void
 mock_price_free (MockPrice *price)
 {
     g_free (price->currency);
@@ -133,6 +145,7 @@ mock_snap_free (MockSnap *snap)
 {
     g_list_free_full (snap->apps, (GDestroyNotify) mock_app_free);
     g_free (snap->channel);
+    g_list_free_full (snap->channels, (GDestroyNotify) mock_channel_free);
     g_free (snap->confinement);
     g_free (snap->contact);
     g_free (snap->description);
@@ -469,6 +482,27 @@ mock_snap_set_channel (MockSnap *snap, const gchar *channel)
 {
     g_free (snap->channel);
     snap->channel = g_strdup (channel);
+}
+
+MockChannel *
+mock_snap_add_channel (MockSnap *snap, const gchar *track, const gchar *risk, const gchar *branch)
+{
+    MockChannel *channel;
+
+    channel = g_slice_new0 (MockChannel);
+    channel->channel = g_strdup (risk);
+    channel->confinement = g_strdup ("strict");
+    channel->epoch = g_strdup ("0");
+    if (branch != NULL)
+        channel->name = g_strdup_printf ("%s/%s/%s", track, risk, branch);
+    else
+        channel->name = g_strdup_printf ("%s/%s", track, risk);
+    channel->revision = g_strdup ("REVISION");
+    channel->size = 65535;
+    channel->version = g_strdup ("VERSION");
+    snap->channels = g_list_append (snap->channels, channel);
+
+    return channel;
 }
 
 void
@@ -1258,6 +1292,32 @@ make_snap_node (MockSnap *snap)
     if (snap->channel) {
         json_builder_set_member_name (builder, "channel");
         json_builder_add_string_value (builder, snap->channel);
+    }
+    if (snap->channels != NULL) {
+        GList *link;
+
+        json_builder_set_member_name (builder, "channels");
+        json_builder_begin_object (builder);
+        for (link = snap->channels; link; link = link->next) {
+            MockChannel *channel = link->data;
+
+            json_builder_set_member_name (builder, channel->name);
+            json_builder_begin_object (builder);
+            json_builder_set_member_name (builder, "revision");
+            json_builder_add_string_value (builder, channel->revision);
+            json_builder_set_member_name (builder, "confinement");
+            json_builder_add_string_value (builder, channel->confinement);
+            json_builder_set_member_name (builder, "version");
+            json_builder_add_string_value (builder, channel->version);
+            json_builder_set_member_name (builder, "channel");
+            json_builder_add_string_value (builder, channel->channel);
+            json_builder_set_member_name (builder, "epoch");
+            json_builder_add_string_value (builder, channel->epoch);
+            json_builder_set_member_name (builder, "size");
+            json_builder_add_int_value (builder, channel->size);
+            json_builder_end_object (builder);
+        }
+        json_builder_end_object (builder);
     }
     json_builder_set_member_name (builder, "confinement");
     json_builder_add_string_value (builder, snap->confinement);

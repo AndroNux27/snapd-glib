@@ -94,6 +94,8 @@ GPtrArray        *snapd_snap_get_apps             (SnapdSnap *snap);
 
 const gchar      *snapd_snap_get_channel          (SnapdSnap *snap);
 
+GPtrArray        *snapd_snap_get_channels         (SnapdSnap *snap);
+
 SnapdConfinement  snapd_snap_get_confinement      (SnapdSnap *snap);
 
 const gchar      *snapd_snap_get_contact          (SnapdSnap *snap);

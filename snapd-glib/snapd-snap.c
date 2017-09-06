@@ -37,6 +37,7 @@ struct _SnapdSnap
 
     GPtrArray *apps;
     gchar *channel;
+    GPtrArray *channels;
     SnapdConfinement confinement;
     gchar *contact;
     gchar *description;
@@ -91,6 +92,7 @@ enum
     PROP_TRACKING_CHANNEL,
     PROP_TITLE,
     PROP_LICENSE,
+    PROP_CHANNELS,
     PROP_LAST
 };
 
@@ -128,6 +130,23 @@ snapd_snap_get_channel (SnapdSnap *snap)
 {
     g_return_val_if_fail (SNAPD_IS_SNAP (snap), NULL);
     return snap->channel;
+}
+
+/**
+ * snapd_snap_get_channels:
+ * @snap: a #SnapdSnap.
+ *
+ * Gets the available channels for this snap.
+ *
+ * Returns: (transfer none) (element-type SnapdChannel): an array of #SnapdChannels.
+ *
+ * Since: 1.20
+ */
+GPtrArray *
+snapd_snap_get_channels (SnapdSnap *snap)
+{
+    g_return_val_if_fail (SNAPD_IS_SNAP (snap), NULL);
+    return snap->channels;
 }
 
 /**
@@ -558,6 +577,11 @@ snapd_snap_set_property (GObject *object, guint prop_id, const GValue *value, GP
         g_free (snap->channel);
         snap->channel = g_strdup (g_value_get_string (value));
         break;
+    case PROP_CHANNELS:
+        g_clear_pointer (&snap->channels, g_ptr_array_unref);
+        if (g_value_get_boxed (value) != NULL)
+            snap->channels = g_ptr_array_ref (g_value_get_boxed (value));
+        break;
     case PROP_CONFINEMENT:
         snap->confinement = g_value_get_enum (value);
         break;
@@ -666,6 +690,9 @@ snapd_snap_get_property (GObject *object, guint prop_id, GValue *value, GParamSp
     case PROP_CHANNEL:
         g_value_set_string (value, snap->channel);
         break;
+    case PROP_CHANNELS:
+        g_value_set_boxed (value, snap->channels);
+        break;
     case PROP_CONFINEMENT:
         g_value_set_enum (value, snap->confinement);
         break;
@@ -751,6 +778,7 @@ snapd_snap_finalize (GObject *object)
 
     g_clear_pointer (&snap->apps, g_ptr_array_unref);
     g_clear_pointer (&snap->channel, g_free);
+    g_clear_pointer (&snap->channels, g_ptr_array_unref);
     g_clear_pointer (&snap->contact, g_free);
     g_clear_pointer (&snap->description, g_free);
     g_clear_pointer (&snap->developer, g_free);
@@ -791,6 +819,13 @@ snapd_snap_class_init (SnapdSnapClass *klass)
                                                           "Channel the snap is from",
                                                           NULL,
                                                           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+    g_object_class_install_property (gobject_class,
+                                     PROP_CHANNELS,
+                                     g_param_spec_boxed ("channels",
+                                                         "channels",
+                                                         "Channels this snap is available on",
+                                                         G_TYPE_PTR_ARRAY,
+                                                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
     g_object_class_install_property (gobject_class,
                                      PROP_CONFINEMENT,
                                      g_param_spec_enum ("confinement",

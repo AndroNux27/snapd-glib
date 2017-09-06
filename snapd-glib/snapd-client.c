@@ -19,6 +19,7 @@
 #include "snapd-alias.h"
 #include "snapd-app.h"
 #include "snapd-assertion.h"
+#include "snapd-channel.h"
 #include "snapd-error.h"
 #include "snapd-login.h"
 #include "snapd-plug.h"
@@ -900,31 +901,39 @@ parse_get_system_information_response (SnapdRequest *request, SoupMessageHeaders
     snapd_request_complete (request, NULL);
 }
 
+static SnapdConfinement
+parse_confinement (const gchar *value)
+{
+    if (strcmp (value, "strict") == 0)
+        return SNAPD_CONFINEMENT_STRICT;
+    else if (strcmp (value, "classic") == 0)
+        return SNAPD_CONFINEMENT_CLASSIC;
+    else if (strcmp (value, "devmode") == 0)
+        return SNAPD_CONFINEMENT_DEVMODE;
+    else
+        return SNAPD_CONFINEMENT_UNKNOWN;
+}
+
 static SnapdSnap *
 parse_snap (JsonObject *object, GError **error)
 {
-    const gchar *confinement_string;
-    SnapdConfinement confinement = SNAPD_CONFINEMENT_UNKNOWN;
+    SnapdConfinement confinement;
     const gchar *snap_type_string;
     SnapdSnapType snap_type = SNAPD_SNAP_TYPE_UNKNOWN;
     const gchar *snap_status_string;
     SnapdSnapStatus snap_status = SNAPD_SNAP_STATUS_UNKNOWN;
     g_autoptr(JsonArray) apps = NULL;
+    g_autoptr(JsonObject) channels = NULL;
     g_autoptr(GDateTime) install_date = NULL;
     JsonObject *prices;
     g_autoptr(GPtrArray) apps_array = NULL;
+    g_autoptr(GPtrArray) channels_array = NULL;
     g_autoptr(GPtrArray) prices_array = NULL;
     g_autoptr(JsonArray) screenshots = NULL;
     g_autoptr(GPtrArray) screenshots_array = NULL;
     guint i;
 
-    confinement_string = get_string (object, "confinement", "");
-    if (strcmp (confinement_string, "strict") == 0)
-        confinement = SNAPD_CONFINEMENT_STRICT;
-    else if (strcmp (confinement_string, "classic") == 0)
-        confinement = SNAPD_CONFINEMENT_CLASSIC;
-    else if (strcmp (confinement_string, "devmode") == 0)
-        confinement = SNAPD_CONFINEMENT_DEVMODE;
+    confinement = parse_confinement (get_string (object, "confinement", ""));
 
     snap_type_string = get_string (object, "type", "");
     if (strcmp (snap_type_string, "app") == 0)
@@ -1010,6 +1019,43 @@ parse_snap (JsonObject *object, GError **error)
         g_ptr_array_add (apps_array, g_steal_pointer (&app));
     }
 
+    channels = get_object (object, "channels");
+    channels_array = g_ptr_array_new_with_free_func (g_object_unref);
+    if (channels != NULL) {
+        JsonObjectIter iter;
+        const gchar *name;
+        JsonNode *channel_node;
+
+        json_object_iter_init (&iter, channels);
+        while (json_object_iter_next (&iter, &name, &channel_node)) {
+            JsonObject *c;
+            SnapdSystemConfinement confinement;
+            g_autoptr(SnapdChannel) channel = NULL;
+
+            if (json_node_get_value_type (channel_node) != JSON_TYPE_OBJECT) {
+                g_set_error_literal (error,
+                                     SNAPD_ERROR,
+                                     SNAPD_ERROR_READ_FAILED,
+                                     "Unexpected channel type");
+                return NULL;
+            }
+            c = json_node_get_object (channel_node);
+
+            confinement = parse_confinement (get_string (c, "confinement", ""));
+
+            channel = g_object_new (SNAPD_TYPE_CHANNEL,
+                                    "channel", get_string (c, "channel", NULL),
+                                    "confinement", confinement,
+                                    "epoch", get_string (c, "epoch", NULL),
+                                    "name", name,
+                                    "revision", get_string (c, "revision", NULL),
+                                    "size", get_int (c, "size", 0),
+                                    "version", get_string (c, "version", NULL),
+                                    NULL);
+            g_ptr_array_add (channels_array, g_steal_pointer (&channel));
+        }
+    }
+
     install_date = get_date_time (object, "install-date");
 
     prices = get_object (object, "prices");
@@ -1066,6 +1112,7 @@ parse_snap (JsonObject *object, GError **error)
     return g_object_new (SNAPD_TYPE_SNAP,
                          "apps", apps_array,
                          "channel", get_string (object, "channel", NULL),
+                         "channels", channels_array,
                          "confinement", confinement,
                          "contact", get_string (object, "contact", NULL),
                          "description", get_string (object, "description", NULL),

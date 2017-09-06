@@ -41,6 +41,7 @@ typedef struct
 {
     GList *apps;
     gchar *channel;
+    GList *channels;
     gchar *confinement;
     gchar *contact;
     gchar *description;
@@ -89,6 +90,17 @@ typedef struct
     gchar *name;
     gchar *status;
 } MockAlias;
+
+typedef struct
+{
+    gchar *channel;
+    gchar *confinement;
+    gchar *epoch;
+    gchar *name;
+    gchar *revision;
+    int size;
+    gchar *version;
+} MockChannel;
 
 typedef struct
 {
@@ -189,6 +201,11 @@ void            mock_app_set_desktop_file         (MockApp       *app,
 
 void            mock_snap_set_channel             (MockSnap      *snap,
                                                    const gchar   *channel);
+
+MockChannel    *mock_snap_add_channel             (MockSnap      *snap,
+                                                   const gchar   *track,
+                                                   const gchar   *risk,
+                                                   const gchar   *branch);
 
 void            mock_snap_set_confinement         (MockSnap      *snap,
                                                    const gchar   *confinement);
